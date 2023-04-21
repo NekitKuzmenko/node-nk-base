@@ -1,0 +1,14 @@
+{
+  "name": "node-nk-base",
+  "version": "2.1.1",
+  "description": "database for nodejs by NK",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "NekitKuzmenko",
+  "license": "ISC",
+  "dependencies": {
+    "nan": "^2.17.0"
+  }
+}
