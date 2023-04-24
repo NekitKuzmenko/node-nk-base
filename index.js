@@ -51,9 +51,10 @@ function NKB(path, threads, bufsize) {
         }
 
         this.find = (path) => find(ptr, path);
-        this.get = (path) => get(ptr, path);
+        this.get = (path, vars) => get(ptr, path, vars);
         this.count = () => count(ptr);
         this.all = () => all(ptr);
+        this.getOfAll = (vars) => getOfAll(ptr, vars);
         this.set = (path, value) => set(ptr, path, value);
         this.add = (path, value) => add(ptr, path, value);
         this.append = (path, value) => append(ptr, path, value);
@@ -63,9 +64,21 @@ function NKB(path, threads, bufsize) {
 
     function find(ptr, path) {
         
-        if(typeof path !== 'string') path = String(path);
+        if(typeof path === 'object') {
 
-        path = String.fromCharCode(Buffer.byteLength(path)) + path;
+            let new_path = "";
+
+            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            path = new_path;
+
+        } else {
+            
+            if(typeof path !== 'string') path = String(path);
+
+            path = String.fromCharCode(Buffer.byteLength(path)) + path;
+
+        }
         
         let res = functions.request(1, ptr, Buffer.byteLength(path), path);
 
@@ -73,22 +86,85 @@ function NKB(path, threads, bufsize) {
 
     }
 
-    function get(ptr, path) {
-
-        if(typeof path !== 'string') path = String(path);
-
-        path = String.fromCharCode(Buffer.byteLength(path)) + path;
+    function get(ptr, path, vars) {
         
-        let res = functions.request(2, ptr, Buffer.byteLength(path), path);
+        if(!vars) {
+            
+            if(typeof path === 'object') {
 
-        return res;
+                vars = Array(path.length);
+
+                for(let i = 0; i < path.length; i++) {
+
+                    if(typeof path[i] !== 'string') path[i] = String(path[i]);
+
+                    vars[i] = String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+        
+                    vars[i] = functions.request(2, ptr, Buffer.byteLength(vars[i]), vars[i]);
+
+                }
+
+            } else {
+ 
+                if(typeof path !== 'string') path = String(path);
+                
+                vars = String.fromCharCode(Buffer.byteLength(path)) + path;
+        
+                vars = functions.request(2, ptr, Buffer.byteLength(vars), vars);
+                
+            }
+
+        } else {
+            
+            if(typeof path === 'object') {
+
+                let new_path = "";
+    
+                for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+    
+                path = new_path;
+                
+            } else {
+                
+                if(typeof path !== 'string') path = String(path);
+    
+                path = String.fromCharCode(Buffer.byteLength(path)) + path;
+                
+            }
+
+
+            if(typeof vars === 'object') {
+
+                for(let i = 0; i < vars.length; i++) {
+
+                    if(typeof vars[i] !== 'string') vars[i] = String(vars[i]);
+
+                    vars[i] = path + String.fromCharCode(Buffer.byteLength(vars[i])) + vars[i];
+        
+                    vars[i] = functions.request(2, ptr, Buffer.byteLength(vars[i]), vars[i]);
+
+                }
+
+            } else {
+ 
+                if(typeof vars !== 'string') vars = String(vars);
+
+                vars = path + String.fromCharCode(Buffer.byteLength(vars)) + vars;
+        
+                vars = functions.request(2, ptr, Buffer.byteLength(vars), vars);
+
+            }
+
+        }
+ 
+        return vars;
         
     }
 
     function count(ptr) {
 
         let res = functions.request(4, ptr, 0);
-
+        
         return res;
 
     }
@@ -101,15 +177,41 @@ function NKB(path, threads, bufsize) {
 
     }
 
-    function set(ptr, path, value) {
+    function getOfAll(ptr, vars) {
+
+        if(typeof vars === 'object') {
+
+            for(let i = 0; i < vars.length; i++) {
+
+                if(typeof vars[i] !== 'string') vars[i] = String(vars[i]);
+
+                vars[i] = path + String.fromCharCode(Buffer.byteLength(vars[i])) + vars[i];
+        
+                vars[i] = functions.request(2, ptr, 0, "", Buffer.byteLength(vars[i]), vars[i]);
+
+            }
+
+        } else {
+ 
+            if(typeof vars !== 'string') vars = String(vars);
+        
+            vars = functions.request(6, ptr, 0, "", Buffer.byteLength(vars), vars);
+
+        }
+
+        return vars;
+
+    }
+
+    function set(ptr, path, value, disable_logs) {
 
         if(typeof path !== 'string') path = String(path);
 
         path = String.fromCharCode(Buffer.byteLength(path)) + path;
 
-        if(typeof value === 'string') value = BigInt(value); else if(typeof value === 'number') value = BigInt(value); else if(value === true) value = 3; else if(value === false) value = 4;
+        if(value === true) value = 3; else if(value === false) value = 4;
         
-        let res = functions.request(8, ptr, Buffer.byteLength(path), path, (typeof value === 'string' ? Buffer.byteLength(value) : 0), value);
+        let res = functions.request(8, ptr, Buffer.byteLength(path), path, value, (typeof value === 'string' ? Buffer.byteLength(value) : 0));
 
         if(!disable_logs && res === null) console.log(`Error while setting "${value}" to "${path}"`);
 
@@ -117,33 +219,49 @@ function NKB(path, threads, bufsize) {
 
     }
 
-    function add(ptr, path, value) {
+    function add(ptr, path, value, disable_logs) {
 
         if(typeof path !== 'string') path = String(path);
 
         path = String.fromCharCode(Buffer.byteLength(path)) + path;
 
-        if(typeof value === 'string') value = BigInt(value); else if(typeof value === 'number') value = BigInt(value);
-        
-        let res = functions.request(9, ptr, Buffer.byteLength(path), path, value);
+        if(typeof value === 'string') value = Number(value);
 
-        if(!disable_logs && res === null) console.log(`Error while adding "${value}" to "${path}"`);
+        let old_value = functions.request(2, ptr, Buffer.byteLength(path), path);
+        let res;
+
+        if(typeof old_value === 'number' && (value += old_value) !== NaN) {
+            
+            res = functions.request(8, ptr, Buffer.byteLength(path), path, value);    
+
+            if(!disable_logs && res === null) console.log(`Error while adding "${value}" to "${path}"`);
+
+        } else console.log(`Error while adding "${value}" to "${path}"`);
 
         return res;
 
     }
 
-    function append(ptr, path, value) {
+    function append(ptr, path, value, disable_logs) {
 
         if(typeof path !== 'string') path = String(path);
 
         path = String.fromCharCode(Buffer.byteLength(path)) + path;
 
         if(typeof value !== 'string') value = String(value);
-        
-        let res = functions.request(10, ptr, Buffer.byteLength(path), path, Buffer.byteLength(value), value);
 
-        if(!disable_logs && res === null) console.log(`Error while setting "${value}" to "${path}"`);
+        let old_value = functions.request(2, ptr, Buffer.byteLength(path), path);
+        let res;
+
+        if(typeof old_value !== null) {
+
+            old_value += value;
+            
+            res = functions.request(8, ptr, Buffer.byteLength(path), path, Buffer.byteLength(value), value);
+
+            if(!disable_logs && res === null) console.log(`Error while appending "${value}" to "${path}"`);
+
+        } else console.log(`Error while appending "${value}" to "${path}"`);
 
         return res;
 
@@ -153,11 +271,7 @@ function NKB(path, threads, bufsize) {
 
         if(typeof name !== 'string') name = String(name);
         
-        if(type === 3 && !value) type = 4; else if(type === 2) {
-
-            if(typeof value !== 'bigint') value = BigInt(value);
-
-        } 
+        if(type === 3 && !value) type = 4;
         
         let res = functions.request(11, ptr, 0, "", Buffer.byteLength(name), name, type, (type === 5 ? Buffer.byteLength(value) : 0), value);
         
@@ -182,9 +296,10 @@ function NKB(path, threads, bufsize) {
     }
 
     this.find = (path) => find(3n, path);
-    this.get = (path) => get(3n, path);
+    this.get = (path, vars) => get(3n, path, vars);
     this.count = () => count(3n);
     this.all = () => all(3n);
+    this.getOfAll = (vars) => getOfAll(3n, vars);
     this.set = (path, value) => set(3n, path, value);
     this.add = (path, value) => add(3n, path, value);
     this.append = (path, value) => append(3n, path, value);

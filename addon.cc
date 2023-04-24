@@ -40,7 +40,7 @@ struct thread {
     ulong ptr;
     ulong path_len;
     char *path;
-    ulong vars_count;
+    ulong vars_len;
     char *vars;
     ulong value_len;
     uchar name_len;
@@ -169,6 +169,20 @@ void thread_main() {
         
 
         if(th->ptr != 3) {
+
+            if(th->path_len == 0) {
+
+                element.type = *(uchar*)(th->ptr+db);
+
+                if(th->method != 1) {
+
+                    element.name_len = *(uchar*)(th->ptr+db+9);
+                    
+                    if(element.type == 6) element.elements_count = *(ulong*)(th->ptr+db+10+element.name_len);
+
+                }
+
+            }
             
             th->ptr += *(uchar*)(th->ptr+db+9) + 10;
 
@@ -234,28 +248,27 @@ void thread_main() {
             "   jmp find_ptr\n"
 
             "next_path:\n"
-
-            "   decq %1\n"
+            
+            "   movzbq 9(%%r14), %%r12\n"
+            "   addq $10, %%r14\n"
+            "   addq %%r12, %%r14\n"
 
             "   movq (%%r14), %%r15\n"
             "   cmpq $0, %%r15\n"
             "   je not_found\n"
-        
+
             "   movq 8(%%r14), %%r14\n"
+            "   addq %4, %%r14\n"
 
-            "   movb 1(%1), %%r12b\n"
+            "   movb 9(%%r14), %%r12b\n"
 
-            "   movzbq %%r12b, %%r13\n"
-
-            "   movq 2(%%r13), %%r12\n"
-
-            "   subq %%r12, 16(%3)\n"
-            "   decq 16(%3)\n"
-
-            "   movq %%r13, %%r12\n"
+            "   movzbq (%1), %%r13\n"
+            "   movq %%r13, %%r10\n"
 
             "   addq %1, %%r13\n"
 
+            "   incq %1\n"
+            
             "   jmp find_ptr\n"
 
             "found:\n"
@@ -283,24 +296,12 @@ void thread_main() {
             "   popq 24(%3)\n"
             
             :: "r" (th->ptr), "r" (th->path), "r" (&element), "r" (th), "r" (db)
-            : "rax", "r15", "r14", "r13", "r12", "r11", "r10", "memory"); 
+            : "rax", "r15", "r14", "r13", "r12", "r11", "r10", "memory");
 
             if(th->method != 1 && th->ptr != 0) th->ptr += *(uchar*)(th->ptr+db+9) + 10;
         
-        } else {
-            
-            element.type = *(uchar*)(th->ptr+db);
-
-            if(th->method != 1) {
-
-                element.name_len = *(uchar*)(th->ptr+db+9);
-            
-                if(element.type == 6) element.elements_count = *(ulong*)(th->ptr+db);
-
-            }
-
         }
-
+        
 
         if(th->ptr == 0) {
 
@@ -326,9 +327,10 @@ void thread_main() {
 
                 th->value_len = *(ulong*)(th->ptr+db);
 
-                if(th->value_len > 0) asm("movq (%0, %1), %%r15\n"
-                "movq 8(%0, %1), %%r14\n"
-                "movq 16(%0, %1), %%r13\n"
+                if(th->value_len > 0) asm("addq %1, %0\n"
+                "movq (%0), %%r15\n"
+                "movq 8(%0), %%r14\n"
+                "movq 16(%0), %%r13\n"
                 "addq %1, %%r13\n"
                 
                 "jmp copy_blocks\n"
@@ -350,24 +352,24 @@ void thread_main() {
                 "copy_block:\n" 
 
                 "   leaq 16(%%r13), %%rsi\n"
-                "   movq (%%r13), %%rcx\n"
+                "   movq (%%r13), %%rdx\n"
 
+                "   subq %%rdx, %%r15\n"
+                
                 "   call fill\n"
-
+                
                 "   movq 8(%%r13), %%r13\n"
                 "   addq %1, %%r13\n"
-
-                "   subq %%rcx, %%r15\n"
-
-                "   cmpq (%%r14), %%r15\n"
+                
+                "   cmpq (%%r13), %%r15\n"
                 "   jle copy_last_block\n"
-
+                
                 "   jmp copy_block\n"
 
                 "copy_blocks_end:\n"
 
                 :: "r" (th->ptr), "r" (db), "D" (th->buf)
-                : "rsi", "rcx", "r15", "r14", "r13", "r12");
+                : "rsi", "rcx", "rdx", "r15", "r14", "r13", "memory");
 
             }
 
@@ -409,19 +411,174 @@ void thread_main() {
             th->value_len = element.elements_count;
 
         } else if(th->method == 6) {
-
             
+            if(element.elements_count != 0) asm("addq %1, %0\n"
+            "movq (%0), %%r15\n"
+            "movq 8(%0), %%r14\n"
+            "addq %1, %%r14\n"
+
+            "incq %%r15\n"
+
+            "copy_elem:\n"
+
+            "   decq %%r15\n"
+            "   cmpq $0, %%r15\n"
+            "   je copy_elems_end\n"
+
+            "   movq %%r14, %%rsi\n"
+            
+            "   movq 1(%%rsi), %%r14\n"
+            "   addq %1, %%r14\n"
+
+            "   movzbq 9(%%rsi), %%rdx\n"
+            "   movb %%dl, (%2)\n"
+            
+            "   incq %2\n"
+            "   addq $10, %%rsi\n"
+            
+            "   call fill\n"
+
+            "   movq (%%rsi), %%r13\n"
+
+            "   cmpq $0, %%r13\n"
+            "   je not_found_var\n"
+
+            "   movq 8(%%rsi), %%r12\n"
+            "   addq %1, %%r12\n"
+            
+            "find_var:\n"
+
+            "   movq 1(%%r12), %%rsi\n"
+            "   addq %1, %%rsi\n"
+
+            "   cmpb %3, 9(%%r12)\n"
+            "   jne next_var\n"
+        
+            "   leaq 10(%%r12), %%r12\n"
+            "   xorq %%rcx, %%rcx\n"
+        
+            "cmp_vars:\n"
+            
+            "   movb (%4, %%rcx), %%r11b\n"
+            "   cmpb %%r11b, (%%r12, %%rcx)\n"
+            "   jne next_var\n"
+            
+            "   incb %%cl\n"
+            "   cmpb %%cl, %3\n"
+            "   je found_var\n"
+        
+            "   jmp cmp_vars\n"
+
+            "next_var:\n"
+
+            "   decq %%r13\n"
+            "   cmpq $0, %%r13\n"
+            "   je not_found_var\n"
+            
+            "   movq %%rsi, %%r12\n"
+
+            "   jmp find_var\n"
+
+            "not_found_var:\n"
+            
+            "   movb $0, (%2)\n"
+            "   incq %2\n"
+
+            "   jmp copy_elem\n"
+
+            "found_var:\n"
+
+            "   movb -10(%%r12), %%r11b\n"
+            "   movb %%r11b, (%2)\n"
+            "   incq %2\n"
+
+            "   cmpb $1, %%r11b\n"
+            "   je copy_number\n"
+
+            "   cmpb $2, %%r11b\n"
+            "   je copy_number\n"
+
+            "   cmpb $5, %%r11b\n"
+            "   je copy_string\n"
+
+            "   jmp copy_elem\n"
+
+            "copy_number:\n"
+
+            "   movzbq %3, %%r11\n"
+            "   addq %%r11, %%r12\n"
+
+            "   movq (%%r12), %%r12\n"
+            "   movq %%r12, (%2)\n"
+
+            "   addq $8, %2\n"
+
+            "   jmp copy_elem\n"
+
+            "copy_string:\n"
+
+            "   movzbq %3, %%r11\n"
+            "   addq %%r11, %%r12\n"
+
+            "   movq (%%r12), %%r11\n"
+
+            "   movq %%r11, (%2)\n"
+            "   addq $8, %2\n"
+
+            "   movq 8(%%r12), %%r13\n"
+            "   movq 16(%%r12), %%r12\n"
+            "   addq %1, %%r12\n"
+                
+            "   jmp copy_var_blocks\n"
+
+            "copy_last_var_block:\n"
+                
+            "   leaq 16(%%r12), %%rsi\n"
+            "   movq %%r11, %%rdx\n"
+
+            "   call fill\n"
+            
+            "   jmp copy_elem\n"
+
+            "copy_var_blocks:\n"
+                
+            "   cmpq (%%r12), %%r11\n"
+            "   jle copy_last_var_block\n"
+             
+            "copy_var_block:\n" 
+
+            "   leaq 16(%%r12), %%rsi\n"
+            "   movq (%%r12), %%rdx\n"
+
+            "   subq %%rdx, %%r11\n"
+                
+            "   call fill\n"
+              
+            "   movq 8(%%r12), %%r12\n"
+            "   addq %1, %%r12\n"
+                
+            "   cmpq (%%r12), %%r11\n"
+            "   jle copy_last_var_block\n"
+                
+            "   jmp copy_var_block\n"
+
+            "copy_elems_end:\n"
+            
+            :: "r" (th->ptr), "r" (db), "D" (th->buf), "r" ((uchar)th->vars_len), "r" (th->vars)
+            : "rsi", "rdx", "rcx", "r15", "r14", "r13", "r12", "r11", "memory");
+            
+            th->value_len = element.elements_count;
 
         } else if(th->method == 7) {
 
             
 
         } else if(th->method == 8) {
-
+            
             th->type = element.type;
 
             if(element.type == 1) napi_get_value_double(*(napi_env*)th->buf, *(napi_value*)(th->buf+8), (double*)(th->ptr+db)); else
-            if(element.type == 2) napi_get_value_bigint_int64(*(napi_env*)th->buf, *(napi_value*)(th->buf+8), (long*)(th->ptr+db), &lossless); else
+            if(element.type == 2) napi_get_value_int64(*(napi_env*)th->buf, *(napi_value*)(th->buf+8), (long*)(th->ptr+db)); else
             if(element.type == 3 || element.type == 4) {
 
                 napi_get_value_uint32(*(napi_env*)th->buf, *(napi_value*)(th->buf+8), &tmp);
@@ -429,36 +586,94 @@ void thread_main() {
                 *(uchar*)(th->ptr+db-element.name_len-10) = (uchar)tmp;
 
             } else if(element.type == 5) {
-
-                asm(""
                 
-                "jmp rewrite_blocks"
+                napi_get_value_uint32(*(napi_env*)th->buf, *(napi_value*)(th->buf+16), (uint*)&th->value_len);
+                
+                napi_get_value_string_utf8(*(napi_env*)th->buf, *(napi_value*)(th->buf+8), th->buf, th->value_len+1, 0);
+                
+                asm("addq %1, %0\n"
+                
+                "jmp write_blocks\n"
 
-                "rewrite_first_block:\n"
+                "count_block_length:\n"
 
-                "   "
+                "   movq $16, %%r14\n"
+                "   addq %2, %%r14\n"
 
-                "rewrite_create_blocks:\n"
+                "   movq 48(%4), %%rax\n"
+                "   xorq %%rdx, %%rdx\n"
+                "   movq $10, %%rcx\n"
 
-                "   "
+                "   divq %%rcx\n"
+                "   addq %%rax, %%r14\n"
 
-                "rewrite_blocks:\n"
+                "   cmpq $32, %%r14\n"
+                "   jg alloc_new_block\n"
 
-                "   movq 16(%0, %1), %%r15\n"
-                "   cmpq (%%r15, %1), %2\n"
-                "   jle rewrite_first_block\n"
+                "   movq $32, %%r14\n"
 
-                "   cmpq (%0, %1), %2\n"
-                "   jg rewrite_create_blocks\n"
+                "alloc_new_block:\n"
 
-                "   "
+                "   movq %%r14, %%rcx\n"
+                
+                "   lock xaddq %%r14, 19(%1)\n"
+                
+                "   incq 8(%0)\n"
+                "   movq %%r14, 8(%%r15)\n"
 
-                "rewrite_blocks_end:\n"
+                "   addq %1, %%r14\n"
+                
+                "   subq $16, %%rcx\n"
+                "   movq %%rcx, (%%r14)\n"
 
+                "   leaq 16(%%r14), %%rdi\n"
+                "   movq %2, %%rdx\n"
+                
+                "   call fill\n"
+                
+                "   jmp write_blocks_end\n"
 
+                "write_blocks:\n"
+                
+                "   movq (%0), %%r15\n"
+                "   movq %%r15, 48(%4)\n"
+                "   movq %2, (%0)\n"
 
-                :: "r" (th->ptr), "r" (db), "r" (th->value_len), "S" (th->buf)
-                : "rdi", "rdx", "rcx", "r15", "memory");
+                "   movq 16(%0), %%r15\n"
+                "   addq %1, %%r15\n"
+                "   movq 8(%0), %%r14\n"
+                
+                "write_block:\n"
+
+                "   leaq 16(%%r15), %%rdi\n"
+                "   movq (%%r15), %%rdx\n"
+
+                "   cmpq %%rdx, %2\n"
+                "   jle write_last_block\n"
+
+                "   subq %%rdx, %2\n"
+
+                "   call fill\n"
+
+                "   decq %%r14\n"
+                "   cmpq $0, %%r14\n"
+                "   je count_block_length\n"
+
+                "   movq 8(%%r15), %%r15\n"
+                "   addq %1, %%r15\n"
+
+                "   jmp write_block\n"
+
+                "write_last_block:\n"
+
+                "   movq %2, %%rdx\n"
+                "   call fill\n"
+
+                "write_blocks_end:\n"
+
+                :: "r" (th->ptr), "r" (db), "r" (th->value_len), "S" (th->buf), "r" (th)
+                : "rax", "rdi", "rdx", "rcx", "r15", "r14", "memory");
+
 
             }
 
@@ -933,6 +1148,7 @@ napi_value request(napi_env env, napi_callback_info info) {
     th->res_tid = gettid();
     th->name_len = 0;
     th->value_len = 0;
+    th->vars_len = 0;
     
     napi_get_value_bigint_uint64(env, args[1], &th->ptr, &lossless);
 
@@ -971,16 +1187,23 @@ napi_value request(napi_env env, napi_callback_info info) {
 
         th->method = 6;
 
+        napi_get_value_uint32(env, args[4], (uint*)&th->vars_len);
+
+        th->vars = (char*)malloc(th->vars_len+1);
+
+        napi_get_value_string_utf8(env, args[5], th->vars, th->vars_len+1, 0);
+
     } else if(method == 7) {
 
         th->method = 7;
 
     } else if(method == 8) {
-
+        
         th->method = 8;
 
         *(napi_env*)th->buf = env;
         *(napi_value*)(th->buf+8) = args[4];
+        *(napi_value*)(th->buf+16) = args[5];
 
     } else if(method == 9) {
 
@@ -988,7 +1211,7 @@ napi_value request(napi_env env, napi_callback_info info) {
 
         napi_get_value_uint32(env, args[4], (uint*)&th->value_len);
 
-        napi_get_value_string_utf8(env, args[5], th->buf, th->value_len, 0);
+        napi_get_value_string_utf8(env, args[5], th->buf, th->value_len+1, 0);
 
     } else if(method == 10) {
 
@@ -1018,7 +1241,7 @@ napi_value request(napi_env env, napi_callback_info info) {
             
             napi_get_value_double(env, args[8], (double*)th->buf);
             
-        } else if(tmp == 2) napi_get_value_bigint_int64(env, args[8], (long*)th->buf, &lossless);
+        } else if(tmp == 2) napi_get_value_int64(env, args[8], (long*)th->buf);
         
         if(tmp == 5) {
 
@@ -1108,7 +1331,7 @@ napi_value request(napi_env env, napi_callback_info info) {
         } else {
             
             if(th->type == 1) napi_create_double(env, *(double*)th->buf, &result); else
-            if(th->type == 2) napi_create_bigint_int64(env, *(long*)th->buf, &result); else
+            if(th->type == 2) napi_create_int64(env, *(long*)th->buf, &result); else
             if(th->type == 3) napi_get_boolean(env, true, &result); else
             if(th->type == 4) napi_get_boolean(env, false, &result); else
             if(th->type == 5) napi_create_string_utf8(env, th->buf, th->value_len, &result);
@@ -1161,19 +1384,95 @@ napi_value request(napi_env env, napi_callback_info info) {
 
     } else if(method == 6) {
 
+         if(th->ptr == 0) {
             
+            napi_get_null(env, &result);
+
+        } else {
+            
+            napi_create_array_with_length(env, th->value_len, &result);
+
+            if(th->value_len != 0) {
+
+                napi_value elem_obj, name_property, value_property, elem_name, elem_value;
+                char *ptr = th->buf;
+                uchar type;
+                ulong str_len;
+
+                napi_create_string_utf8(env, "id", 2, &name_property);
+                napi_create_string_utf8(env, "value", 5, &value_property);
+
+                for(ulong i = 0; i < th->value_len; i++) {
+
+                    napi_create_object(env, &elem_obj);
+                    
+                    napi_create_string_utf8(env, ptr+1, *ptr, &elem_name);
+                    napi_set_property(env, elem_obj, name_property, elem_name);
+
+                    ptr += *ptr + 1;
+                    type = *ptr;
+
+                    if(type == 1) {
+                        
+                        napi_create_double(env, *(double*)(ptr+1), &elem_value);
+
+                        ptr += 9;
+
+                    } else if(type == 2) {
+                        
+                        napi_create_int64(env, *(long*)(ptr+1), &elem_value);
+
+                        ptr += 9;
+
+                    } else if(type == 3) {
+                        
+                        napi_get_boolean(env, true, &elem_value);
+
+                        ptr += 1;
+
+                    } else if(type == 4) {
+                        
+                        napi_get_boolean(env, false, &elem_value);
+
+                        ptr += 1;
+
+                    } else if(type == 5) {
+
+                        str_len = *(ulong*)(ptr+1);
+                        
+                        napi_create_string_utf8(env, ptr+9, str_len, &elem_value);
+                        
+                        ptr += str_len + 9;
+
+                    } else if(type == 0) {
+                        
+                        napi_get_null(env, &elem_value);
+
+                        ptr += 1;
+
+                    }
+
+                    napi_set_property(env, elem_obj, value_property, elem_value);
+
+                    napi_set_element(env, result, i, elem_obj);
+
+                }
+
+            }
+
+        }
 
     } else if(method == 7) {
 
             
 
     } else if(method == 8) {
-
+        
         if(th->ptr == 0) {
 
             napi_get_null(env, &result);
 
-        } else if(th->type == 1) napi_create_double(env, *(double*)th->buf, &result); else if(th->type == 2) napi_create_bigint_int64(env, *(ulong*)th->buf, &result); else if(th->type == 3) napi_get_boolean(env, true, &result); else if(th->type == 4) napi_get_boolean(env, false, &result); else napi_create_string_utf8(env, th->buf, th->value_len, &result);
+        } else napi_get_boolean(env, true, &result); //if(th->type == 1) napi_create_double(env, *(double*)th->buf, &result); else if(th->type == 2) napi_create_int64(env, *(ulong*)th->buf, &result); else if(th->type == 3) napi_get_boolean(env, true, &result); else if(th->type == 4) napi_get_boolean(env, false, &result); else napi_create_string_utf8(env, th->buf, th->value_len, &result);
 
     } else if(method == 9) {
 
@@ -1181,7 +1480,7 @@ napi_value request(napi_env env, napi_callback_info info) {
 
             napi_get_null(env, &result);
 
-        } else if(th->type == 1) napi_create_double(env, *(double*)th->buf, &result); else napi_create_bigint_int64(env, *(ulong*)th->buf, &result);
+        } else if(th->type == 1) napi_create_double(env, *(double*)th->buf, &result); else napi_create_int64(env, *(ulong*)th->buf, &result);
 
     } else if(method == 10) {
 
@@ -1220,6 +1519,7 @@ napi_value request(napi_env env, napi_callback_info info) {
 
     if(th->path_len != 0) free(th->path);
     if(th->name_len != 0) free(th->name);
+    if(th->vars_len != 0) free(th->vars);
 
 
     return result;
@@ -1267,203 +1567,3 @@ napi_value Init(napi_env env, napi_value exports) {
 }
 
 NAPI_MODULE(NODE_GYP_MODULE_NAME, Init)
-
-
-
-/*
-
-asm volatile ("movzbq %3, %%rax\n"
-                
-                "jmp check_elem_type\n"
-
-                "write_first_ptr:\n"
-
-                "   movq $1, (%%r15)\n"
-                "   movq %%rax, 8(%%r15)\n"
-                "   subq %1, 8(%%r15)\n"
-                
-                "   movzbq %3, %%r14\n"
-                
-                "   leaq 10(%%rax, %%r14), %%rax\n"
-                
-                "   ret\n"
-
-                "write_last_ptr:\n"
-            
-                "   movq (%%r15), %%r14\n"
-
-                "   incq (%%r15)\n"
-
-                "   movq 8(%%r15), %%r15\n"
-                
-                "find_last_elem:\n"
-                
-                "   decq %%r14\n"
-                "   cmpq $0, %%r14\n"
-                "   je found_last_elem\n"
-                
-                "   movq 1(%%r15, %1), %%r15\n"
-                
-                "   jmp find_last_elem\n"
-
-                "found_last_elem:\n"
-                
-                "   movq %%rax, 1(%%r15, %1)\n"
-                
-                "   subq %1, 1(%%r15, %1)\n"
-                
-                "   movzbq %3, %%r14\n"
-                
-                "   leaq 10(%%rax, %%r14), %%rax\n"
-                
-                "   ret\n"
-
-                "alloc_elem:\n"
-            
-                "   lock xaddq %%rax, 19(%1)\n"
-            
-                "   addq %1, %%rax\n"
-                
-                "   movb %0, (%%rax)\n"
-                "   movq $0, 1(%%rax)\n"
-                "   movb %3, 9(%%rax)\n"
-                
-                "   leaq 10(%%rax), %%rdi\n"
-                "   movq 57(%2), %%rsi\n"
-                "   movzbq %3, %%rdx\n"
-
-                "   call fill\n"
-                
-                "   movq 8(%2), %%r15\n"
-                "   addq %1, %%r15\n"
-                
-                "   cmpq $0, (%%r15)\n"
-                "   je write_first_ptr\n"
-
-                "   jmp write_last_ptr\n"
-
-                "check_elem_type:\n"
-
-                "   cmpb $1, %0\n"
-                "   je create_elem1\n"
-
-                "   cmpb $2, %0\n"
-                "   je create_elem2\n"
-
-                "   cmpb $3, %0\n"
-                "   je create_elem34\n"
-
-                "   cmpb $4, %0\n"
-                "   je create_elem34\n"
-
-                "   cmpb $5, %0\n"
-                "   je create_elem5\n"
-
-                "   cmpb $6, %0\n"
-                "   je create_elem6\n"
-
-                "create_elem1:\n"
-            
-                "   addq $18, %%rax\n"
-
-                "   call alloc_elem\n"
-                
-                "   movq 75(%2), %%r15\n"
-                "   movq %%r15, (%%rax)\n"
-                
-                "   jmp create_elem_end\n"
-
-                "create_elem2:\n"
-            
-                "   addq $18, %%rax\n"
-
-                "   call alloc_elem\n"
-
-                "   movq 75(%2), %%r15\n"
-                "   movq %%r15, (%%rax)\n"
-
-                "   jmp create_elem_end\n"
-
-                "create_elem34:\n"
-            
-                "   addq $10, %%rax\n"
-
-                "   call alloc_elem\n"
-
-                "   jmp create_elem_end\n"
-
-                "create_elem5:\n"
-                
-                "   addq $34, %%rax\n"
-
-                "   call alloc_elem\n"
-                
-                "   movq %4, (%%rax)\n"
-                "   movq $1, 8(%%rax)\n"
-                
-                "   cmpq $16, %4\n"
-                "   jl create_elem5_16\n"
-                
-                "   movq $10, %%r14\n"
-                "   addq %4, %%r14\n"
-                
-                "   lock xaddq %%r14, 19(%1)\n"
-
-                "   movq %%r14, 16(%%rax)\n"
-
-                "   addq %1, %%r14\n"
-                
-                "   movq %4, (%%r14)\n"
-                "   movq $0, 8(%%r14)\n"
-
-                "   leaq 16(%%r14), %%rdi\n"
-                "   movq 75(%2), %%rsi\n"
-                "   movq %4, %%rdx\n"
-
-                "   call fill\n"
-
-                "   jmp create_elem_end\n"
-
-                "create_elem5_16:\n"
-            
-                "   movq $26, %%r14\n"
-            
-                "   lock xaddq %%r14, 19(%1)\n"
-                
-                "   movq %%r14, 16(%%rax)\n"
-                
-                "   addq %1, %%r14\n"
-
-                "   movq $16, (%%r14)\n"
-                "   movq $0, 8(%%r14)\n"
-                
-                "   leaq 16(%%r14), %%rdi\n"
-                "   movq 75(%2), %%rsi\n"
-                "   movq %4, %%rdx\n"
-                
-                "   call fill\n"
-
-                "   jmp create_elem_end\n"
-
-                "create_elem6:\n"
-                
-                "   addq $26, %%rax\n"
-                
-                "   call alloc_elem\n"
-                
-                "   movq $0, (%%rax)\n"
-                "   movq $0, 8(%%rax)\n"
-                
-                "create_elem_end:\n"
-                
-                "   movq %%rax, 8(%2)\n"
-                "   subq %1, 8(%2)\n"
-                "   subq $10, 8(%2)\n"
-                "   movzbq %3, %%r15\n"
-                "   subq %%r15, 8(%2)\n"
-
-                :: "r" (th->type), "r" (db), "r" (th), "r" (th->name_len), "r" (th->value_len)
-                : "rax", "rcx", "rdi", "rsi", "rdx", "r15", "r14", "memory");
-
-
-*/
