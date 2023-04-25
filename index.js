@@ -238,8 +238,6 @@ function NKB(path, threads, bufsize) {
 
         }
 
-        path = String.fromCharCode(Buffer.byteLength(path)) + path;
-
         if(value === true) value = 3; else if(value === false) value = 4;
         
         let res = functions.request(8, ptr, Buffer.byteLength(path), path, value, (typeof value === 'string' ? Buffer.byteLength(value) : 0));
@@ -287,9 +285,21 @@ function NKB(path, threads, bufsize) {
 
     function append(ptr, path, value, disable_logs) {
 
-        if(typeof path !== 'string') path = String(path);
+        if(typeof path === 'object') {
 
-        path = String.fromCharCode(Buffer.byteLength(path)) + path;
+            let new_path = "";
+
+            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            path = new_path;
+
+        } else {
+            
+            if(typeof path !== 'string') path = String(path);
+
+            path = String.fromCharCode(Buffer.byteLength(path)) + path;
+
+        }
 
         if(typeof value !== 'string') value = String(value);
 
@@ -342,11 +352,9 @@ function NKB(path, threads, bufsize) {
 
         }
         
-        if(type === 3 && !value) type = 4;
+        let res = functions.request(12, ptr, Buffer.byteLength(path), path);
         
-        let res = functions.request(11, ptr, 0, "", Buffer.byteLength(name), name, type, (type === 5 ? Buffer.byteLength(value) : 0), value);
-        
-        if(!disable_logs && res === null) console.log(`Error while creating "${name}"`);
+        if(!disable_logs && res === null) console.log(`Error while removing "${path}"`);
 
         return res;
 

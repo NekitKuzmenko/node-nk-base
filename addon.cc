@@ -949,7 +949,7 @@ void thread_main() {
             }
 
         } else if(th->method == 12) {
-
+            
             asm("addq %1, %2\n"
             "movq (%2), %%r15\n"
             "movq 8(%2), %%r14\n"
@@ -967,7 +967,7 @@ void thread_main() {
 
             "   movq 1(%%r14, %1), %%r13\n"
             "   cmpq %0, %%r13\n"
-            "   je found_previous"
+            "   je found_previous\n"
 
             "   movq %%r13, %%r14\n"
             
@@ -999,7 +999,7 @@ void thread_main() {
 
             "remove_end:\n"
 
-            :: "r" (th->ptr), "r" (db), "r" (element.parent)
+            :: "r" (th->ptr-element.name_len-10), "r" (db), "r" (element.parent)
             : "r15", "r14", "r13");
 
         }
@@ -1355,7 +1355,7 @@ napi_value request(napi_env env, napi_callback_info info) {
 
     //printf("done in: %lu ns\n", ((time2.tv_sec - time1.tv_sec) * 1000000000 + time2.tv_nsec - time1.tv_nsec));
     
-
+    
     if(method == 1) {
 
         if(th->ptr == 0) {
@@ -1566,7 +1566,7 @@ napi_value request(napi_env env, napi_callback_info info) {
         }
 
     } else if(method == 12) {
-
+        
         if(th->ptr == 0) {
 
             napi_get_null(env, &result);
@@ -1579,7 +1579,6 @@ napi_value request(napi_env env, napi_callback_info info) {
     if(th->path_len != 0) free(th->path);
     if(th->name_len != 0) free(th->name);
     if(th->vars_len != 0) free(th->vars);
-
 
     return result;
 
