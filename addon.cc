@@ -138,7 +138,7 @@ void thread_main() {
         ulong name_len;
         char *value;
         ulong elements_count;
-        char *first_element;
+        char *parent;
     } element;
 
     asm volatile ("movq %%r13, %0\n"
@@ -190,6 +190,8 @@ void thread_main() {
         
         
         if(th->path_len > 0) {
+
+            element.parent = (char*)th->ptr;
             
             asm volatile ("pushq 24(%3)\n" 
 
@@ -253,6 +255,9 @@ void thread_main() {
             "   addq $10, %%r14\n"
             "   addq %%r12, %%r14\n"
 
+            "   movq %%r14, 26(%2)\n"
+            "   subq %4, 26(%2)\n"
+
             "   movq (%%r14), %%r15\n"
             "   cmpq $0, %%r15\n"
             "   je not_found\n"
@@ -278,7 +283,7 @@ void thread_main() {
             "   jne next_path\n"
         
             "   movb (%%r14), %%al\n"
-            "   movb %%al, (%2)\n"        
+            "   movb %%al, (%2)\n"
 
             "   movzbq 9(%%r14), %%r13\n"
             "   movb %%r13b, 1(%2)\n"
@@ -387,7 +392,7 @@ void thread_main() {
             "addq %1, %%r15\n"
 
             "copy_name:\n"
-
+            
             "   movq %%r15, %%rsi\n"
             
             "   movq 1(%%rsi), %%r15\n"
@@ -406,8 +411,8 @@ void thread_main() {
             "   jne copy_name\n"
             
             :: "r" (th->ptr), "r" (db), "r" (element.elements_count), "D" (th->buf)
-            : "rsi", "rdx", "r15", "memory");
-
+            : "rsi", "rdx", "rcx", "r15", "memory");
+            
             th->value_len = element.elements_count;
 
         } else if(th->method == 6) {
@@ -945,7 +950,57 @@ void thread_main() {
 
         } else if(th->method == 12) {
 
+            asm("addq %1, %2\n"
+            "movq (%2), %%r15\n"
+            "movq 8(%2), %%r14\n"
+
+            "cmpq %0, %%r14\n"
+            "je remove_first\n"
+
+            "decq %%r15\n"
+
+            "find_previous:\n"
+
+            "   decq %%r15\n"
+            "   cmpq $0, %%r15\n"
+            "   je remove_last\n"
+
+            "   movq 1(%%r14, %1), %%r13\n"
+            "   cmpq %0, %%r13\n"
+            "   je found_previous"
+
+            "   movq %%r13, %%r14\n"
             
+            "   jmp find_previous\n"
+
+            "found_previous:\n"
+
+            "   decq (%2)\n"
+            "   movq 1(%%r13, %1), %%r13\n"
+            "   movq %%r13, 1(%%r14, %1)\n"
+
+            "   jmp remove_end\n"
+
+            "remove_first:\n"
+
+            "   decq %%r15\n"
+            "   cmpq $0, %%r15\n"
+            "   je remove_last\n"
+
+            "   decq (%2)\n"
+            "   movq 1(%%r14, %1), %%r14\n"
+            "   movq %%r14, 8(%2)\n"
+
+            "   jmp remove_end\n"
+
+            "remove_last:\n"
+
+            "   decq (%2)\n"
+
+            "remove_end:\n"
+
+            :: "r" (th->ptr), "r" (db), "r" (element.parent)
+            : "r15", "r14", "r13");
 
         }
 
@@ -1512,7 +1567,11 @@ napi_value request(napi_env env, napi_callback_info info) {
 
     } else if(method == 12) {
 
-        
+        if(th->ptr == 0) {
+
+            napi_get_null(env, &result);
+
+        } else napi_get_boolean(env, true, &result);
 
     }
     
@@ -1545,7 +1604,7 @@ napi_value Init(napi_env env, napi_value exports) {
     wait_creating_threads.tv_nsec = 10000;
 
     wait_free_thread.tv_sec = 0;
-    wait_free_thread.tv_nsec = 2000;
+    wait_free_thread.tv_nsec = 5000;
 
     wait_signal.tv_sec = 1;
     wait_signal.tv_nsec = 0;

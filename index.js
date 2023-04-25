@@ -59,6 +59,7 @@ function NKB(path, threads, bufsize) {
         this.add = (path, value) => add(ptr, path, value);
         this.append = (path, value) => append(ptr, path, value);
         this.create = (name, type, value, disable_logs) => create(ptr, name, type, value, disable_logs);
+        this.remove = (name, disable_logs) => remove(ptr, name, disable_logs);
 
     }
 
@@ -181,15 +182,31 @@ function NKB(path, threads, bufsize) {
 
         if(typeof vars === 'object') {
 
+            let tmp;
+
             for(let i = 0; i < vars.length; i++) {
 
                 if(typeof vars[i] !== 'string') vars[i] = String(vars[i]);
-
-                vars[i] = path + String.fromCharCode(Buffer.byteLength(vars[i])) + vars[i];
         
-                vars[i] = functions.request(2, ptr, 0, "", Buffer.byteLength(vars[i]), vars[i]);
+                vars[i] = functions.request(6, ptr, 0, "", Buffer.byteLength(vars[i]), vars[i]);
 
             }
+            
+            for(let i = 0; i < vars[0].length; i++) {
+
+                tmp = vars[0][i].value;
+                vars[0][i].value = Array(vars.length);
+                vars[0][i].value[0] = tmp;
+
+            }
+            
+            for(let i = 1; i < vars.length; i++) {
+
+                for(let i2 = 0; i2 < vars[0].length; i2++) vars[0][i2].value[i] = vars[i][i2].value;
+
+            }
+
+            return vars[0];
 
         } else {
  
@@ -205,7 +222,21 @@ function NKB(path, threads, bufsize) {
 
     function set(ptr, path, value, disable_logs) {
 
-        if(typeof path !== 'string') path = String(path);
+        if(typeof path === 'object') {
+
+            let new_path = "";
+
+            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            path = new_path;
+
+        } else {
+            
+            if(typeof path !== 'string') path = String(path);
+
+            path = String.fromCharCode(Buffer.byteLength(path)) + path;
+
+        }
 
         path = String.fromCharCode(Buffer.byteLength(path)) + path;
 
@@ -221,9 +252,21 @@ function NKB(path, threads, bufsize) {
 
     function add(ptr, path, value, disable_logs) {
 
-        if(typeof path !== 'string') path = String(path);
+        if(typeof path === 'object') {
 
-        path = String.fromCharCode(Buffer.byteLength(path)) + path;
+            let new_path = "";
+
+            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            path = new_path;
+
+        } else {
+            
+            if(typeof path !== 'string') path = String(path);
+
+            path = String.fromCharCode(Buffer.byteLength(path)) + path;
+
+        }
 
         if(typeof value === 'string') value = Number(value);
 
@@ -281,6 +324,34 @@ function NKB(path, threads, bufsize) {
 
     }
 
+    function remove(ptr, path, disable_logs) {
+
+        if(typeof path === 'object') {
+
+            let new_path = "";
+
+            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            path = new_path;
+
+        } else {
+            
+            if(typeof path !== 'string') path = String(path);
+
+            path = String.fromCharCode(Buffer.byteLength(path)) + path;
+
+        }
+        
+        if(type === 3 && !value) type = 4;
+        
+        let res = functions.request(11, ptr, 0, "", Buffer.byteLength(name), name, type, (type === 5 ? Buffer.byteLength(value) : 0), value);
+        
+        if(!disable_logs && res === null) console.log(`Error while creating "${name}"`);
+
+        return res;
+
+    }
+
     this.float = 1;
     this.int = 2;
     this.bool = 3;
@@ -304,6 +375,7 @@ function NKB(path, threads, bufsize) {
     this.add = (path, value) => add(3n, path, value);
     this.append = (path, value) => append(3n, path, value);
     this.create = (name, type, value, disable_logs) => create(3n, name, type, value, disable_logs);
+    this.remove = (name, disable_logs) => remove(3n, name, disable_logs);
 
 }
 
@@ -345,7 +417,7 @@ module.exports = NKB;
     create: 11
         ptr, path_len, path, name_len, name, type, value_len, value
 
-    delete: 12
+    remove: 12
         ptr, path_len, path
 
 */
