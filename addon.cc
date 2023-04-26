@@ -521,19 +521,19 @@ void thread_main() {
             "   jmp copy_elem\n"
 
             "copy_string:\n"
-
+            
             "   movzbq %3, %%r11\n"
             "   addq %%r11, %%r12\n"
 
             "   movq (%%r12), %%r11\n"
-
+            
             "   movq %%r11, (%2)\n"
             "   addq $8, %2\n"
 
             "   movq 8(%%r12), %%r13\n"
             "   movq 16(%%r12), %%r12\n"
             "   addq %1, %%r12\n"
-                
+            
             "   jmp copy_var_blocks\n"
 
             "copy_last_var_block:\n"
@@ -548,8 +548,9 @@ void thread_main() {
             "copy_var_blocks:\n"
                 
             "   cmpq (%%r12), %%r11\n"
+            
             "   jle copy_last_var_block\n"
-             
+            
             "copy_var_block:\n" 
 
             "   leaq 16(%%r12), %%rsi\n"
@@ -881,14 +882,14 @@ void thread_main() {
                 "   cmpq $16, %5\n"
                 "   jl create_elem5_16\n"
                 
-                "   movq $10, %%r14\n"
+                "   movq $16, %%r14\n"
                 "   addq %5, %%r14\n"
                 
                 "   lock xaddq %%r14, 19(%2)\n"
 
-                "   addq %2, %%r14\n"
-
                 "   movq %%r14, 16(%%rax)\n"
+
+                "   addq %2, %%r14\n"
                 
                 "   movq %5, (%%r14)\n"
                 "   movq $0, 8(%%r14)\n"
@@ -1319,11 +1320,15 @@ napi_value request(napi_env env, napi_callback_info info) {
     }
 
 
-    /*if((double)db_file_stat.st_size * 0.7 < (*(ulong*)(db+19)) + length) {
+    if((double)db_file_stat.st_size * 0.7 < *(ulong*)(db+19)) {
 
-        db = (char*)mremap(db, db_file_stat.st_size, db_file_stat.st_size + (ulong)((double)db_file_stat.st_size * 0.3 + length) / 4096, MAP_SHARED, db_fd, 0);
+        ftruncate(db_fd, db_file_stat.st_size + (ulong)((double)db_file_stat.st_size * 0.5 + 4096) / 4096 * 4096);
+        
+        db = (char*)mremap(db, db_file_stat.st_size, db_file_stat.st_size + (ulong)((double)db_file_stat.st_size * 0.5 + 4096) / 4096 * 4096, MAP_SHARED, db_fd, 0);
+        
+        fstat(db_fd, &db_file_stat);
 
-    }*/
+    }
 
 
     th->status = 2;
@@ -1583,18 +1588,6 @@ napi_value request(napi_env env, napi_callback_info info) {
     return result;
 
 }
-
-
-/*
-
-error codes:
-
-    0: success
-    1: already exists
-    2: doesn't exists
-    3: types don't match
-
-*/
 
 
 napi_value Init(napi_env env, napi_value exports) {
