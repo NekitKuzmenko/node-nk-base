@@ -1,12 +1,24 @@
 function NKB(path, threads, bufsize) {
     
-    const functions = require(`./build/Release/addon.node`);
+    const functions = require(`./addon.node`);
 
     functions.init_db(path.length, path, threads, BigInt(bufsize));
 
     function elem(ptr, element) {
         
-        if(typeof element === 'object') ptr = element.ptr; else if(typeof element === 'string') {
+        if(typeof element === 'object') {
+        
+            if(!element) {
+                
+                console.log(`Can't find element "${element}"`);
+
+                return null;
+
+            }
+            
+            ptr = element.ptr;
+        
+        } else if(typeof element === 'string') {
 
             element = String.fromCharCode(Buffer.byteLength(element)) + element;
             
@@ -25,7 +37,7 @@ function NKB(path, threads, bufsize) {
         } else if(typeof element === 'number') {
             
             element = String(element);
-
+            
             element = String.fromCharCode(Buffer.byteLength(element)) + element;
 
             ptr = functions.request(1, ptr, Buffer.byteLength(element), element);
@@ -69,7 +81,13 @@ function NKB(path, threads, bufsize) {
 
             let new_path = "";
 
-            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+            for(let i = 0; i < path.length; i++) {
+                
+                if(typeof path[i] !== 'string') path[i] = String(path[i]);
+
+                new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            }
 
             path = new_path;
 
@@ -121,7 +139,13 @@ function NKB(path, threads, bufsize) {
 
                 let new_path = "";
     
-                for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+                for(let i = 0; i < path.length; i++) {
+                
+                    if(typeof path[i] !== 'string') path[i] = String(path[i]);
+    
+                    new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+    
+                }
     
                 path = new_path;
                 
@@ -171,9 +195,9 @@ function NKB(path, threads, bufsize) {
     }
 
     function all(ptr) {
-
+        
         let res = functions.request(5, ptr, 0);
-
+        
         return res;
 
     }
@@ -221,12 +245,18 @@ function NKB(path, threads, bufsize) {
     }
 
     function set(ptr, path, value, disable_logs) {
-
+        
         if(typeof path === 'object') {
 
             let new_path = "";
 
-            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+            for(let i = 0; i < path.length; i++) {
+                
+                if(typeof path[i] !== 'string') path[i] = String(path[i]);
+
+                new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            }
 
             path = new_path;
 
@@ -254,7 +284,13 @@ function NKB(path, threads, bufsize) {
 
             let new_path = "";
 
-            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+            for(let i = 0; i < path.length; i++) {
+                
+                if(typeof path[i] !== 'string') path[i] = String(path[i]);
+
+                new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            }
 
             path = new_path;
 
@@ -289,7 +325,13 @@ function NKB(path, threads, bufsize) {
 
             let new_path = "";
 
-            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+            for(let i = 0; i < path.length; i++) {
+                
+                if(typeof path[i] !== 'string') path[i] = String(path[i]);
+
+                new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            }
 
             path = new_path;
 
@@ -305,12 +347,12 @@ function NKB(path, threads, bufsize) {
 
         let old_value = functions.request(2, ptr, Buffer.byteLength(path), path);
         let res;
-
+        
         if(typeof old_value !== null) {
 
             old_value += value;
             
-            res = functions.request(8, ptr, Buffer.byteLength(path), path, Buffer.byteLength(value), value);
+            res = functions.request(8, ptr, Buffer.byteLength(path), path, old_value, Buffer.byteLength(old_value));
 
             if(!disable_logs && res === null) console.log(`Error while appending "${value}" to "${path}"`);
 
@@ -324,7 +366,7 @@ function NKB(path, threads, bufsize) {
 
         if(typeof name !== 'string') name = String(name);
         
-        if(type === 3 && !value) type = 4;
+        if(type === 3 && !value) type = 4; else if(type === 5 && typeof value !== 'string') value = String(value);
         
         let res = functions.request(11, ptr, 0, "", Buffer.byteLength(name), name, type, (type === 5 ? Buffer.byteLength(value) : 0), value);
         
@@ -340,7 +382,13 @@ function NKB(path, threads, bufsize) {
 
             let new_path = "";
 
-            for(let i = 0; i < path.length; i++) new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+            for(let i = 0; i < path.length; i++) {
+                
+                if(typeof path[i] !== 'string') path[i] = String(path[i]);
+
+                new_path += String.fromCharCode(Buffer.byteLength(path[i])) + path[i];
+
+            }
 
             path = new_path;
 

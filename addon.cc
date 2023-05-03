@@ -11,6 +11,10 @@
 
 #pragma pack(1)
 
+#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
+#include <sys/syscall.h>
+#define gettid() syscall(SYS_gettid)
+#endif
 
 typedef unsigned char uchar;
 typedef unsigned short ushort;
@@ -170,24 +174,28 @@ void thread_main() {
 
         if(th->ptr != 3) {
 
-            if(th->path_len == 0) {
+            element.type = *(uchar*)(th->ptr+db);
 
-                element.type = *(uchar*)(th->ptr+db);
+            if(th->method != 1 || th->path_len > 0) {
 
-                if(th->method != 1) {
+                element.name_len = *(uchar*)(th->ptr+db+9);
 
-                    element.name_len = *(uchar*)(th->ptr+db+9);
+                if(element.type == 6) {
                     
-                    if(element.type == 6) element.elements_count = *(ulong*)(th->ptr+db+10+element.name_len);
+                    element.elements_count = *(ulong*)(th->ptr+db+10+element.name_len);
+
+                    th->ptr += element.name_len + 10;
 
                 }
 
             }
-            
-            th->ptr += *(uchar*)(th->ptr+db+9) + 10;
+
+        } else {
+
+            element.elements_count = *(ulong*)(db+3);
 
         }
-        
+
         
         if(th->path_len > 0) {
 
@@ -211,7 +219,7 @@ void thread_main() {
         
             "addq %1, %%r13\n"
             "addq $1, %1\n"
-        
+            
             "find_ptr:\n"
         
             "   cmpb %%r12b, 9(%%r14)\n"
@@ -713,7 +721,7 @@ void thread_main() {
             "   leaq 10(%%r14), %%r12\n"
             
             "cmp_existed_names:\n"
-
+		
             "   decq %%r13\n"
             
             "   movb (%3, %%r13), %%r11b\n"
@@ -745,6 +753,7 @@ void thread_main() {
             : "=r" (already_exists)
             : "r" (th->ptr), "r" (th->name_len), "r" (th->name), "r" (db)
             : "r15", "r14", "r13", "r12", "r11", "memory");
+
             
             if(already_exists == 1) th->ptr = 0; else {
 
@@ -1218,6 +1227,8 @@ napi_value request(napi_env env, napi_callback_info info) {
         napi_get_value_string_utf8(env, args[3], th->path, th->path_len+1, 0);
 
     }
+    
+    
 
     if(method == 1) {
 
