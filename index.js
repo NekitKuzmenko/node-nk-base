@@ -366,7 +366,7 @@ function NKB(path, threads, bufsize) {
 
         if(typeof name !== 'string') name = String(name);
         
-        if(type === 3 && !value) type = 4; else if(type === 5 && typeof value !== 'string') value = String(value);
+        if(type === 1 || type === 2) { if(typeof value !== 'number') value = Number(value) } else  if(type === 3 && !value) type = 4; else if(type === 5 && typeof value !== 'string') value = String(value);
         
         let res = functions.request(11, ptr, 0, "", Buffer.byteLength(name), name, type, (type === 5 ? Buffer.byteLength(value) : 0), value);
         
